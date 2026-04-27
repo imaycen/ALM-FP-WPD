@@ -47,18 +47,15 @@ using namespace ranlib;
 
 
 // Especificar dimension de datos sinteticos
-//int renglones = 240, columnas = 320;
-//int renglones = 480, columnas = 640;
 int renglones, columnas;
 double *sn0, *cs0; //Variable global para fase ruidosa
-double *Q11, *Q12, *Mu11, *Mu12;
-double *Q21, *Q22, *Mu21, *Mu22;
+
 double *dxIs, *dyIs, *dxIc, *dyIc;
 
+double *Is0_h, *Ic0_h, *Is1_h, *Ic1_h, *Is2_h, *Ic2_h, *Is11_h, *Ic11_h;//, *dIs, *dIc;
 
-double *Is0_h, *Ic0_h, *Is1_h, *Ic1_h, *Is2_h, *Ic2_h, *Is11_h, *Ic11_h, *dIs, *dIc;
 
-double TAO = 0.0001, coefR = 1.0, BETA, LAMBDA1, LAMBDA2, LAMBDA3;
+double TAO = 0.001, coefR, BETA, LAMBDA1, LAMBDA2, LAMBDA3;
 char imgname[50];
 
 const double LAMBDA = 1.0;  //para regularizadores TV
@@ -79,9 +76,9 @@ double gradientWrap(double, double);
 double minMod(double, double);  
 void Print3D(Array<double,2>,FILE*,const char*);
 void Print2D(const char*, FILE*, const char*);
-void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double* & Ic_h );
-void solve_descenso_gradiente_ALM( double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, const char* win1, Array<double, 2> dummy, Mat Imagen );
-void solve_gradiente_nesterov_ALM(double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, const char* win1, Array<double, 2> dummy, Mat Imagen );
+void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double* & Ic_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 );
+void solve_descenso_gradiente_ALM( double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen );
+void solve_gradiente_nesterov_ALM(double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen );
 
 // metricas 20/02/2023
 double MSE(Array<double,2>& P, Array<double,2>& Po);
@@ -94,11 +91,11 @@ double NEI(Array<double,2>& P, Array<double,2>& Po);
 // Funciones double para calculos numericos
 void error_relativo(double* errorRe, double* errorIm, double* &Re, double* &Reo, double* &Im, double* &Imo);
 double Funcional( double* &Is_h, double* &Ic_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 );
-void iteracion_Gauss_Seidel( double* &Is_h, double* &Ic_h, double*  &Is1_h, double* &Ic1_h);
-void punto_Fijo_TV_ALM( double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h );
-void solve_punto_fijo_ALM(double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, const char* win1, Array<double, 2> dummy, Mat Imagen);
+void iteracion_Gauss_Seidel( double* &Is_h, double* &Ic_h, double*  &Is1_h, double* &Ic1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 );
+void punto_Fijo_TV_ALM( double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 );
+void solve_punto_fijo_ALM(double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen);
 void boundaryCond1( double* &T1, double* &T2, int renglones, int columnas );
-void boundaryCondALM1( double* &T1, double* &T2, int renglones, int columnas );
+void boundaryCondALM1( double* &T1, double* &T2, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, int renglones, int columnas );
 void normas_derivadas(double* errorRe, double* errorIm, double* Re, double* Im);
 void actualizaQ( double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, double* &dxIc, double* &dyIc, double* &dxIs, double* &dyIs);
 void actualizaMu(double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &dxIc, double* &dyIc, double* &dxIs, double* &dyIs);
@@ -143,8 +140,12 @@ int main( int argc, char **argv )
   const char *win0 = "Imagen ruidosa";      namedWindow( win0, WINDOW_AUTOSIZE );
   const char *win1 = "Estimaciones";        namedWindow( win1, WINDOW_AUTOSIZE );
   
+
+
   // Arreglos para calculos numericos
   double *Is_h, *Ic_h, *derivIs_h, *derivIc_h;
+  double *Q11, *Q12, *Mu11, *Mu12;
+  double *Q21, *Q22, *Mu21, *Mu22;
   long int size_matrix = renglones*columnas;
   size_t size_matrix_bytes = size_matrix * sizeof(double);
   Is_h = (double*)malloc(size_matrix_bytes);
@@ -175,6 +176,7 @@ int main( int argc, char **argv )
   dyIs = (double*)malloc(size_matrix_bytes);
   dxIc = (double*)malloc(size_matrix_bytes);
   dyIc = (double*)malloc(size_matrix_bytes); 
+  
   //lectura de datos sin ruido  
   Mat IMAGENoriginal = imread("phaseEnvuelta.png", IMREAD_GRAYSCALE);  
   
@@ -253,17 +255,17 @@ int main( int argc, char **argv )
   // 1 : Gradient descent
   // 2 : Nesterov acelerated gradient
   // 3 : Fixed-Poin
-  int metodo = 3;
+  int metodo = 2;
     switch ( metodo )
     {
       case 1:      // Descenso de gradiente
-        solve_descenso_gradiente_ALM(Is_h, Ic_h, derivIs_h, derivIc_h, win1, dummy, Imagen);
+        solve_descenso_gradiente_ALM(Is_h, Ic_h, derivIs_h, derivIc_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, win1, dummy, Imagen);
         break;
       case 2:      // NAG
-        solve_gradiente_nesterov_ALM(Is_h, Ic_h, derivIs_h, derivIc_h, win1, dummy, Imagen);
+        solve_gradiente_nesterov_ALM(Is_h, Ic_h, derivIs_h, derivIc_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, win1, dummy, Imagen);
         break;   
       case 3:      // Fixed-point
-        solve_punto_fijo_ALM(Is_h, Ic_h, Is1_h, Ic1_h, win1, dummy, Imagen);
+        solve_punto_fijo_ALM(Is_h, Ic_h, Is1_h, Ic1_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, win1, dummy, Imagen);
         break;     
      }
 
@@ -397,6 +399,7 @@ int main( int argc, char **argv )
   free(dyIs);
   free(dxIc);
   free(dyIc);
+  
   // termina ejecucion del programa
   return 0;
 }
@@ -409,12 +412,10 @@ int main( int argc, char **argv )
 //       funcion para Gauss-Seidel para double
 //              Punto-fijo para ALM
 //*************************************************************************
-void punto_Fijo_TV_ALM( double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h )
+void punto_Fijo_TV_ALM( double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 )
 {
   long int SizeImage = renglones*columnas;
-  
-  //condiciones de frontera Neumann para Is, Ic
-  boundaryCond1( Ic_h, Is_h, renglones, columnas );
+
   for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
      {
       Is1_h[idx_r_c] = Is_h[idx_r_c];
@@ -423,25 +424,25 @@ void punto_Fijo_TV_ALM( double* &Is_h, double* &Ic_h, double* &Is1_h, double* &I
   // calculo de punto fijo K iteraciones de GS
   for ( int k = 0; k < K; k++ )
   {
-    iteracion_Gauss_Seidel(Ic_h, Is_h, Ic1_h, Is1_h);
+    iteracion_Gauss_Seidel(Ic_h, Is_h, Ic1_h, Is1_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22);
 
      for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++)
        {
         Is_h[idx_r_c] = Is1_h[idx_r_c];
         Ic_h[idx_r_c] = Ic1_h[idx_r_c];
        }
-    }
+
+   }
   
 }
-void iteracion_Gauss_Seidel(double* &Ic_h, double* &Is_h, double* &Ic1_h, double* &Is1_h)
+void iteracion_Gauss_Seidel(double* &Ic_h, double* &Is_h, double* &Ic1_h, double* &Is1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22)
 {
   // define parametro de regularizacion
-  double lambda1 = LAMBDA1, lambda2 = LAMBDA2, lambda3 = LAMBDA3;//, lambda4 = LAMBDA4, lambda5 = LAMBDA5;
-  //double beta = BETA;
+  double lambda1 = LAMBDA1, lambda2 = LAMBDA2, lambda3 = LAMBDA3;
   double V1x, V2x, V1y, V2y, Ux, Uy;
   double dxMu11, dyMu12, divMu1, dxMu21, dyMu22, divMu2, numIs, denIs;
   double dxQ11, dyQ12, divQ1, dxQ21, dyQ22, divQ2, numIc, denIc;
-  double residuo, aux;
+  double aux;
   
   for ( long int r = 1; r < renglones-1; r++ )
     for ( long int c = 1; c < columnas-1; c++ )
@@ -519,7 +520,8 @@ void iteracion_Gauss_Seidel(double* &Ic_h, double* &Is_h, double* &Ic1_h, double
         Is1_h[idx_r_c] = numIs / denIs;
         Ic1_h[idx_r_c] = numIc / denIc;
       }
-       //actualiza gradientes para calculo de Q y Mu
+
+           //actualiza gradientes para calculo de Q y Mu
        gradiente( Is1_h, Ic1_h, dxIs, dyIs, dxIc, dyIc );
 
        //soft-thresholding operator
@@ -584,7 +586,7 @@ void boundaryCond1( double* &T1, double* &T2, int renglones, int columnas )
 // ***************************************************************
 //   Condiciones de frontera para problema ALM para double*, double*
 // ***************************************************************
-void boundaryCondALM1( double* &T1, double* &T2, int renglones, int columnas )
+void boundaryCondALM1( double* &T1, double* &T2, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, int renglones, int columnas )
 {
 	// condiciones de frontera
 	//T(0, all) = T(1, all);
@@ -1048,12 +1050,12 @@ return nei;
 // ************************************************************************
 //       funcion principal de la derivada para double
 //*************************************************************************
-void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double* & Ic_h )
+void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double* & Ic_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22 )
 {
  // define parametro de regularizacion
   double lambda1 = LAMBDA1, lambda2 = LAMBDA2, lambda3 = LAMBDA3;
   double dxMu11, dyMu12, divMu1, dxMu21, dyMu22, divMu2;
-  double dxQ11, dyQ12, divQ1, dxQ21, dyQ22, divQ2, aux;
+  double dxQ11, dyQ12, divQ1, dxQ21, dyQ22, divQ2, aux, LapIc, LapIs;
 
   // tamano de arreglo
   long int SizeImage = renglones*columnas;
@@ -1071,11 +1073,10 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
        long int idx_rm1_cp1 = (r - 1)*columnas + c + 1; 
        long int idx_rp1_cm1 = (r + 1)*columnas + c - 1; 
 
-       // Termino (q- Grad(A))
-       Q11[idx_r_c] = Q11[idx_r_c]-dxIc[idx_r_c];//Ic
-       Q12[idx_r_c] = Q12[idx_r_c]-dyIc[idx_r_c];
-       Q21[idx_r_c] = Q21[idx_r_c]-dxIs[idx_r_c];//Is
-       Q22[idx_r_c] = Q22[idx_r_c]-dyIs[idx_r_c];
+       // Termino div (q- Grad(A))
+       // operador Laplaciano
+       LapIc = Ic_h[idx_rm1_c] + Ic_h[idx_rp1_c] + Ic_h[idx_r_cm1] + Ic_h[idx_r_cp1] - 4.0*Ic_h[idx_r_c];
+       LapIs = Is_h[idx_rm1_c] + Is_h[idx_rp1_c] + Is_h[idx_r_cm1] + Is_h[idx_r_cp1] - 4.0*Is_h[idx_r_c];
 
 //           Se obtienen derivadas parciales 
 //           para calculo de divergencia
@@ -1086,12 +1087,14 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
        dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
        dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];           
 
+       
 //           long int idx_r_c = r*columnas + c;
 //           long int idx_r_cm1 = r*columnas + c - 1; 
        dyMu12 = Mu12[idx_r_c]-Mu12[idx_r_cm1];
        dyMu22 = Mu22[idx_r_c]-Mu22[idx_r_cm1];
        dyQ12 = Q12[idx_r_c]-Q12[idx_r_cm1];
        dyQ22 = Q22[idx_r_c]-Q22[idx_r_cm1];
+
 
 //         long int idx_r_c = r*columnas + c;
 //     	   long int idx_r_cp1 = r*columnas + c + 1; 
@@ -1100,19 +1103,22 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
        dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
        dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];
 
+
 //         long int idx_r_c = r*columnas + c;
 //	   long int idx_rp1_c = (r + 1)*columnas + c;
        dxMu11 = Mu11[idx_rp1_c]-Mu11[idx_r_c];
        dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
        dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c];
        dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
+
  
 //           long int idx_r_c = r*columnas + c;
 //           long int idx_rm1_c = (r - 1)*columnas + c;
         dxMu11 = Mu11[idx_r_c]-Mu11[idx_rm1_c];
         dxMu21 = Mu21[idx_r_c]-Mu21[idx_rm1_c];    
         dxQ11 = Q11[idx_r_c]-Q11[idx_rm1_c];
-        dxQ21 = Q21[idx_r_c]-Q21[idx_rm1_c];        
+        dxQ21 = Q21[idx_r_c]-Q21[idx_rm1_c];       
+  
 
 //           long int idx_r_c = r*columnas + c;
 //           long int idx_rp1_c = (r + 1)*columnas + c;
@@ -1120,6 +1126,8 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
         dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
         dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c]; 
         dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
+
+
        // termina calculo de derivadas parciales
    
        //Obtener div Mu1^k y div Mu2^k       
@@ -1133,8 +1141,8 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
       
         // iteracion de descenso de gradiente
         aux = 2.0*lambda3*( Is_h[idx_r_c]*Is_h[idx_r_c] + Ic_h[idx_r_c]*Ic_h[idx_r_c] - 1.0);
-        derivIs_h[idx_r_c] = lambda2*(Is_h[idx_r_c] - sn0[idx_r_c]) + aux*Is_h[idx_r_c] + divMu2 + coefR*divQ2;
-        derivIc_h[idx_r_c] = lambda1*(Ic_h[idx_r_c] - cs0[idx_r_c]) + aux*Ic_h[idx_r_c] + divMu1 + coefR*divQ1;
+        derivIs_h[idx_r_c] = lambda2*(Is_h[idx_r_c] - sn0[idx_r_c]) + aux*Is_h[idx_r_c] + divMu2 + coefR*divQ2 - coefR*LapIs;
+        derivIc_h[idx_r_c] = lambda1*(Ic_h[idx_r_c] - cs0[idx_r_c]) + aux*Ic_h[idx_r_c] + divMu1 + coefR*divQ1 - coefR*LapIc;
 
 }
 }
@@ -1143,8 +1151,9 @@ void Derivada( double* & derivIs_h, double* & derivIc_h, double* & Is_h, double*
 //       descenso de Gradiente para ALM
 //   Descenso de gradiente para arreglos double
 //////////////////////////////////////////////////////////////////////////////
-void solve_descenso_gradiente_ALM( double* & Is_h, double* & Ic_h, double* & derivIs_h, double* & derivIc_h, const char* win1, Array<double, 2> dummy, Mat Imagen)
+void solve_descenso_gradiente_ALM( double* & Is_h, double* & Ic_h, double* & derivIs_h, double* & derivIc_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen)
 {
+  printf("\n\nGradient descent ALM processing\n\n");
   // define parametro de regularizacion
   double lambda1 = LAMBDA1, lambda2 = LAMBDA2, lambda3 = LAMBDA3;
   double dxMu11, dyMu12, divMu1, dxMu21, dyMu22, divMu2;
@@ -1159,19 +1168,15 @@ void solve_descenso_gradiente_ALM( double* & Is_h, double* & Ic_h, double* & der
   double errIc, errIs;
 
   //condiciones de frontera Neumann para Is, Ic
-  boundaryCondALM1( Ic_h, Is_h, renglones, columnas );
+  boundaryCondALM1( Ic_h, Is_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, renglones, columnas );
 
   // inicia iteracion del algoritmo
   double Fx0 = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
   
-  // Gradiente de Is, Ic para
-  // Termino (q- Grad(A))
-  gradiente( Is_h, Ic_h, dxIs, dyIs, dxIc, dyIc );
-  
   while ( flag )
     {
       // calcula derivada de la funcional
-      Derivada( derivIs_h, derivIc_h, Is_h, Ic_h );
+      Derivada( derivIs_h, derivIc_h, Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
 
 
      for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
@@ -1179,87 +1184,11 @@ void solve_descenso_gradiente_ALM( double* & Is_h, double* & Ic_h, double* & der
         // resguarda para calculo de error
         Is1_h[idx_r_c] = Is_h[idx_r_c];
         Ic1_h[idx_r_c] = Ic_h[idx_r_c];      
-       }
-  
-  for ( long int r = 1; r < renglones-1; r++ )
-    for ( long int c = 1; c < columnas-1; c++ )
-      {
-       long int idx_r_c = r*columnas + c;
-       long int idx_rp1_c = (r + 1)*columnas + c;
-       long int idx_rm1_c = (r - 1)*columnas + c;
-       long int idx_r_cp1 = r*columnas + c + 1;
-       long int idx_r_cm1 = r*columnas + c - 1; 
-       long int idx_rm1_cp1 = (r - 1)*columnas + c + 1; 
-       long int idx_rp1_cm1 = (r + 1)*columnas + c - 1; 
-       
-       // Termino (q- Grad(A))
-       Q11[idx_r_c] = Q11[idx_r_c]-dxIc[idx_r_c];//Ic
-       Q12[idx_r_c] = Q12[idx_r_c]-dyIc[idx_r_c];
-       Q21[idx_r_c] = Q21[idx_r_c]-dxIs[idx_r_c];//Is
-       Q22[idx_r_c] = Q22[idx_r_c]-dyIs[idx_r_c];
 
-//           Se obtienen derivadas parciales 
-//           para calculo de divergencia
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cp1 = r*columnas + c + 1;
-       dyMu12 = Mu12[idx_r_cp1]-Mu12[idx_r_c];
-       dyMu22 = Mu22[idx_r_cp1]-Mu22[idx_r_c];
-       dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
-       dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];           
-
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cm1 = r*columnas + c - 1; 
-       dyMu12 = Mu12[idx_r_c]-Mu12[idx_r_cm1];
-       dyMu22 = Mu22[idx_r_c]-Mu22[idx_r_cm1];
-       dyQ12 = Q12[idx_r_c]-Q12[idx_r_cm1];
-       dyQ22 = Q22[idx_r_c]-Q22[idx_r_cm1];
-
-//         long int idx_r_c = r*columnas + c;
-//     	   long int idx_r_cp1 = r*columnas + c + 1; 
-       dyMu12 = Mu12[idx_r_cp1]-Mu12[idx_r_c];
-       dyMu22 = Mu22[idx_r_cp1]-Mu22[idx_r_c];
-       dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
-       dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];
-
-//         long int idx_r_c = r*columnas + c;
-//	   long int idx_rp1_c = (r + 1)*columnas + c;
-       dxMu11 = Mu11[idx_rp1_c]-Mu11[idx_r_c];
-       dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
-       dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c];
-       dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
- 
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rm1_c = (r - 1)*columnas + c;
-        dxMu11 = Mu11[idx_r_c]-Mu11[idx_rm1_c];
-        dxMu21 = Mu21[idx_r_c]-Mu21[idx_rm1_c];    
-        dxQ11 = Q11[idx_r_c]-Q11[idx_rm1_c];
-        dxQ21 = Q21[idx_r_c]-Q21[idx_rm1_c];        
-
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rp1_c = (r + 1)*columnas + c;
-        dxMu11 = Mu11[idx_rp1_c]-Mu11[idx_r_c]; 
-        dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
-        dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c]; 
-        dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
-       // termina calculo de derivadas parciales
-   
-       //Obtener div Mu1^k y div Mu2^k       
-       divMu1 = -1.0*(dxMu11 + dyMu12);
-       divMu2 = -1.0*(dxMu21 + dyMu22);
-       
-       //Obtener div Q1^k y div Q2^k
-       divQ1 = -1.0*(dxQ11 + dyQ12); // Q1 para parte real Ic
-       divQ2 = -1.0*(dxQ21 + dyQ22); // Q2 para parte imaginaria Is
-
-      
-        // iteracion de descenso de gradiente
-        aux = 2.0*lambda3*( Is_h[idx_r_c]*Is_h[idx_r_c] + Ic_h[idx_r_c]*Ic_h[idx_r_c] - 1.0);
-        derivIs_h[idx_r_c] = lambda2*(Is_h[idx_r_c] - sn0[idx_r_c]) + aux*Is_h[idx_r_c] + divMu2 + coefR*divQ2;
-        derivIc_h[idx_r_c] = lambda1*(Ic_h[idx_r_c] - cs0[idx_r_c]) + aux*Ic_h[idx_r_c] + divMu1 + coefR*divQ1;
-        
         Is_h[idx_r_c] = Is_h[idx_r_c] - TAO*derivIs_h[idx_r_c];
         Ic_h[idx_r_c] = Ic_h[idx_r_c] - TAO*derivIc_h[idx_r_c]; 
       }
+     
        //actualiza gradientes para calculo de Q y Mu
        gradiente( Is_h, Ic_h, dxIs, dyIs, dxIc, dyIc );
 
@@ -1527,8 +1456,9 @@ void actualizaMu(double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, dou
 }
 
 
-void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, const char* win1, Array<double, 2> dummy, Mat Imagen )
+void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivIs_h, double* &derivIc_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen )
 {
+  printf("\n\nNAG - ALM processing\n\n");
  // define parametro de regularizacion
   double lambda1 = LAMBDA1, lambda2 = LAMBDA2, lambda3 = LAMBDA3;
   double dxMu11, dyMu12, divMu1, dxMu21, dyMu22, divMu2;
@@ -1542,32 +1472,28 @@ void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivI
   long int SizeImage = renglones*columnas;
 
 
-  double theta0 = 1.0, theta1;        // valores iniciales
+  double theta0 = 1.0, theta1, gamma;        // valores iniciales
+  double Fx0, Fx, difF, suma_Is, suma_Ic;
   
   //condiciones de frontera Neumann para Is, Ic
-  boundaryCondALM1( Ic_h, Is_h, renglones, columnas );
+  boundaryCondALM1( Ic_h, Is_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, renglones, columnas );
   
   // resguarda Is2 = Is
-     for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
-       {
-        // resguarda Is2 = Is, Ic2 = Ic
-        Is2_h[idx_r_c] = Is_h[idx_r_c];
-        Ic2_h[idx_r_c] = Ic_h[idx_r_c];
-       }  
+  for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
+    {
+     // resguarda Is2 = Is, Ic2 = Ic
+     Is2_h[idx_r_c] = Is_h[idx_r_c];
+     Ic2_h[idx_r_c] = Ic_h[idx_r_c];
+    }  
 
-  double Fx0 = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
-
-  // Gradiente de Is, Ic para
-  // Termino (q- Grad(A))
-  gradiente( Is_h, Ic_h, dxIs, dyIs, dxIc, dyIc );
+  Fx0 = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
 
   while ( flag )
     {  
-    theta1 = 0.5*( 1.0 + sqrt(1.0 + 4.0*theta0*theta0) );
-    double gamma = (theta0-1.0)/theta1;
+
     
     //Derivada de iteracion actual
-    Derivada(derivIs_h, derivIc_h, Is_h, Ic_h);
+    Derivada(derivIs_h, derivIc_h, Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22);
     
      // resguarda Is0, Ic0 para calculo de error
      // Is11, Ic11 
@@ -1576,10 +1502,7 @@ void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivI
       for(long int c = 1; c < columnas-1; c++) 
        {
         long int idx_r_c = r*columnas + c; 
-//        Is11_h[idx_r_c] = Is_h[idx_r_c] + gamma*(Is_h[idx_r_c] - Is0_h[idx_r_c]);
-//        Ic11_h[idx_r_c] = Ic_h[idx_r_c] + gamma*(Ic_h[idx_r_c] - Ic0_h[idx_r_c]);  
-
-        
+   
         // resguarda para calculo de error
         Is0_h[idx_r_c] = Is_h[idx_r_c];
         Ic0_h[idx_r_c] = Ic_h[idx_r_c];  
@@ -1587,171 +1510,46 @@ void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivI
         // Is1 = Is - TAO*derivIs
         Is11_h[idx_r_c] = Is_h[idx_r_c]-TAO*derivIs_h[idx_r_c];
         Ic11_h[idx_r_c] = Ic_h[idx_r_c]-TAO*derivIc_h[idx_r_c];  
-                
-////        // Is, Ic auxiliar = extrapolacion
-//        Is11_h[idx_r_c] = Is11_h[idx_r_c] + gamma*(Is11_h[idx_r_c] - Is0_h[idx_r_c]);
-//        Ic11_h[idx_r_c] = Ic11_h[idx_r_c] + gamma*(Ic11_h[idx_r_c] - Ic0_h[idx_r_c]); 
-
-        // codigo para gradiente evaluado en Is11, Ic11
-       //long int idx_r_c = r*columnas + c;
-       long int idx_rp1_c = (r + 1)*columnas + c;
-       long int idx_rm1_c = (r - 1)*columnas + c;
-       long int idx_r_cp1 = r*columnas + c + 1;
-       long int idx_r_cm1 = r*columnas + c - 1; 
-       long int idx_rm1_cp1 = (r - 1)*columnas + c + 1; 
-       long int idx_rp1_cm1 = (r + 1)*columnas + c - 1; 
-
-       // Grad(A)
-        // campo de gradiente de la informacion
-        if ( c == 0 )
-          {  
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cp1 = r*columnas + c + 1;
-           dyIs[idx_r_c] = Is11_h[idx_r_cp1]-Is11_h[idx_r_c];
-           dyIc[idx_r_c] = Ic11_h[idx_r_cp1]-Ic11_h[idx_r_c];
-           }
-        else if ( c == columnas-1 )
-          {  
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cm1 = r*columnas + c - 1; 
-           dyIs[idx_r_c] = Is11_h[idx_r_c]-Is11_h[idx_r_cm1];
-           dyIc[idx_r_c] = Ic11_h[idx_r_c]-Ic11_h[idx_r_cm1];
-           }
-        else
-          {  
-//           long int idx_r_c = r*columnas + c;
-//     	   long int idx_r_cp1 = r*columnas + c + 1; 
-           dyIs[idx_r_c] = Is11_h[idx_r_cp1]-Is11_h[idx_r_c];
-           dyIc[idx_r_c] = Ic11_h[idx_r_cp1]-Ic11_h[idx_r_c];
-          }
-          
-        // campo de gradiente de la informacion
-        if ( r == 0 )
-          {  
-//           long int idx_r_c = r*columnas + c;
-//	   long int idx_rp1_c = (r + 1)*columnas + c;
-           dxIs[idx_r_c] = Is11_h[idx_rp1_c]-Is11_h[idx_r_c];
-           dxIc[idx_r_c] = Ic11_h[idx_rp1_c]-Ic11_h[idx_r_c];
-          }
-        else if ( r == renglones-1 )
-          {  
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rm1_c = (r - 1)*columnas + c;
-           dxIs[idx_r_c] = Is11_h[idx_r_c]-Is11_h[idx_rm1_c];
-           dxIc[idx_r_c] = Ic11_h[idx_r_c]-Ic11_h[idx_rm1_c];
-          }
-        else
-          {  
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rp1_c = (r + 1)*columnas + c;
-           dxIs[idx_r_c] = Is11_h[idx_rp1_c]-Is11_h[idx_r_c]; 
-           dxIc[idx_r_c] = Ic11_h[idx_rp1_c]-Ic11_h[idx_r_c];
-           }
-
-       // Termino (q- Grad(A))
-       Q11[idx_r_c] = Q11[idx_r_c]-dxIc[idx_r_c];//Ic
-       Q12[idx_r_c] = Q12[idx_r_c]-dyIc[idx_r_c];
-       Q21[idx_r_c] = Q21[idx_r_c]-dxIs[idx_r_c];//Is
-       Q22[idx_r_c] = Q22[idx_r_c]-dyIs[idx_r_c];
-
-//           Se obtienen derivadas parciales 
-//           para calculo de divergencia
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cp1 = r*columnas + c + 1;
-       dyMu12 = Mu12[idx_r_cp1]-Mu12[idx_r_c];
-       dyMu22 = Mu22[idx_r_cp1]-Mu22[idx_r_c];
-       dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
-       dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];           
-
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_r_cm1 = r*columnas + c - 1; 
-       dyMu12 = Mu12[idx_r_c]-Mu12[idx_r_cm1];
-       dyMu22 = Mu22[idx_r_c]-Mu22[idx_r_cm1];
-       dyQ12 = Q12[idx_r_c]-Q12[idx_r_cm1];
-       dyQ22 = Q22[idx_r_c]-Q22[idx_r_cm1];
-
-//         long int idx_r_c = r*columnas + c;
-//     	   long int idx_r_cp1 = r*columnas + c + 1; 
-       dyMu12 = Mu12[idx_r_cp1]-Mu12[idx_r_c];
-       dyMu22 = Mu22[idx_r_cp1]-Mu22[idx_r_c];
-       dyQ12 = Q12[idx_r_cp1]-Q12[idx_r_c];
-       dyQ22 = Q22[idx_r_cp1]-Q22[idx_r_c];
-
-//         long int idx_r_c = r*columnas + c;
-//	   long int idx_rp1_c = (r + 1)*columnas + c;
-       dxMu11 = Mu11[idx_rp1_c]-Mu11[idx_r_c];
-       dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
-       dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c];
-       dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
- 
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rm1_c = (r - 1)*columnas + c;
-        dxMu11 = Mu11[idx_r_c]-Mu11[idx_rm1_c];
-        dxMu21 = Mu21[idx_r_c]-Mu21[idx_rm1_c];    
-        dxQ11 = Q11[idx_r_c]-Q11[idx_rm1_c];
-        dxQ21 = Q21[idx_r_c]-Q21[idx_rm1_c];        
-
-//           long int idx_r_c = r*columnas + c;
-//           long int idx_rp1_c = (r + 1)*columnas + c;
-        dxMu11 = Mu11[idx_rp1_c]-Mu11[idx_r_c]; 
-        dxMu21 = Mu21[idx_rp1_c]-Mu21[idx_r_c];
-        dxQ11 = Q11[idx_rp1_c]-Q11[idx_r_c]; 
-        dxQ21 = Q21[idx_rp1_c]-Q21[idx_r_c];
-       // termina calculo de derivadas parciales
-   
-       //Obtener div Mu1^k y div Mu2^k       
-       divMu1 = -1.0*(dxMu11 + dyMu12);
-       divMu2 = -1.0*(dxMu21 + dyMu22);
+        
+        theta1 = 0.5*( 1.0 + sqrt(1.0 + 4.0*theta0*theta0) );
+        gamma = (theta0-1.0)/theta1;
+        // Is, Ic auxiliar = extrapolacion
+        Is_h[idx_r_c] = Is11_h[idx_r_c] + gamma*(Is11_h[idx_r_c] - Is2_h[idx_r_c]) +  (theta0/theta1)*(Is11_h[idx_r_c] - Is_h[idx_r_c]);
+        Ic_h[idx_r_c] = Ic11_h[idx_r_c] + gamma*(Ic11_h[idx_r_c] - Ic2_h[idx_r_c]) +  (theta0/theta1)*(Ic11_h[idx_r_c] - Ic_h[idx_r_c]); 
+       }
        
-       //Obtener div Q1^k y div Q2^k
-       divQ1 = -1.0*(dxQ11 + dyQ12); // Q1 para parte real Ic
-       divQ2 = -1.0*(dxQ21 + dyQ22); // Q2 para parte imaginaria Is
-
+      Fx = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
+      difF = fabs(Fx0-Fx);  
       
-        //Gradiente en la posicion anticipada
-        aux = 2.0*lambda3*( Is11_h[idx_r_c]*Is11_h[idx_r_c] + Ic11_h[idx_r_c]*Ic11_h[idx_r_c] - 1.0);
-        derivIs_h[idx_r_c] = lambda2*(Is11_h[idx_r_c] - sn0[idx_r_c]) + aux*Is11_h[idx_r_c] + divMu2 + coefR*divQ2;
-        derivIc_h[idx_r_c] = lambda1*(Ic11_h[idx_r_c] - cs0[idx_r_c]) + aux*Ic11_h[idx_r_c] + divMu1 + coefR*divQ1;
-        // termina codigo de gradiente
 
-//        //actualizacion de variables 
-        Is_h[idx_r_c] = Is11_h[idx_r_c] - TAO*derivIs_h[idx_r_c];
-        Ic_h[idx_r_c] = Ic11_h[idx_r_c] - TAO*derivIc_h[idx_r_c];    
-        }
-       
-      double Fx = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
-      double difF = fabs(Fx0-Fx);  
-      
-//      gradiente( Is_h, Ic_h, dxIs, dyIs, dxIc, dyIc );
-//      Derivada(derivIs_h, derivIc_h, Is_h, Ic_h);
 //      // reset a las condiciones del descenso, update variables
 //      // Found Comput Math (2015) 15:715–732
-//      //double suma = sum( derivP*(P1-P2) );
-//      double suma_Is = 0.0, suma_Ic = 0.0;
-//      for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
-//        {
-//         suma_Is += derivIs_h[idx_r_c]*(Is11_h[idx_r_c]-Is2_h[idx_r_c]);
-//         suma_Ic += derivIc_h[idx_r_c]*(Ic11_h[idx_r_c]-Ic2_h[idx_r_c]);
-//        }      
-//      if ( (suma_Is > 0.0) || (suma_Ic > 0.0) || (Fx > Fx0) ) 
-//        {//    P2 = P;      theta0 = 1.0;    
-//         for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
-//           {
-//            Is2_h[idx_r_c] = Is_h[idx_r_c];
-//            Ic2_h[idx_r_c] = Ic_h[idx_r_c];
-//           }
-//         theta0 = 1.0; 
-//        }
-//      else
-//        {//    P2 = P1;      theta0 = theta1;    
-//         for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
-//           {
-//            Is2_h[idx_r_c] = Is11_h[idx_r_c];
-//            Ic2_h[idx_r_c] = Ic11_h[idx_r_c];
-//           }
-//        theta0 = theta1; 
-//        }  
-      theta0 = theta1; 
+      //double suma = sum( derivP*(P1-P2) );
+      suma_Is = 0.0, suma_Ic = 0.0;
+      for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
+        {
+         suma_Is += derivIs_h[idx_r_c]*(Is11_h[idx_r_c]-Is2_h[idx_r_c]);
+         suma_Ic += derivIc_h[idx_r_c]*(Ic11_h[idx_r_c]-Ic2_h[idx_r_c]);
+        }      
+      if ( (suma_Is > 0.0) || (suma_Ic > 0.0) || (Fx > Fx0) ) 
+        {//    P2 = P;      theta0 = 1.0;    
+         for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
+           {
+            Is2_h[idx_r_c] = Is_h[idx_r_c];
+            Ic2_h[idx_r_c] = Ic_h[idx_r_c];
+           }
+         theta0 = 1.0; 
+        }
+      else
+        {//    P2 = P1;      theta0 = theta1;    
+         for(long int idx_r_c = 0; idx_r_c < SizeImage; idx_r_c++) 
+           {
+            Is2_h[idx_r_c] = Is11_h[idx_r_c];
+            Ic2_h[idx_r_c] = Ic11_h[idx_r_c];
+           }
+        theta0 = theta1; 
+        }  
+
    
       Fx0 = Fx;
 
@@ -1795,16 +1593,18 @@ void solve_gradiente_nesterov_ALM( double* &Is_h, double* &Ic_h, double* &derivI
 
 }
 
-void solve_punto_fijo_ALM(double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, const char* win1, Array<double, 2> dummy, Mat Imagen)
+void solve_punto_fijo_ALM(double* &Is_h, double* &Ic_h, double* &Is1_h, double* &Ic1_h, double* &Q11, double* &Q12, double* &Q21, double* &Q22, double* &Mu11, double* &Mu12, double* &Mu21, double* &Mu22, const char* win1, Array<double, 2> dummy, Mat Imagen)
 {
-
+  printf("\n\nFixed-point ALM processing\n\n");
   // variables del metodo
   double errIs, errIc;
   unsigned iter = 0;             // contador de iteraciones   
   bool flag = true;
   long int SizeImage = renglones*columnas;
   
-
+  //condiciones de frontera Neumann para Is, Ic
+  boundaryCondALM1( Ic_h, Is_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22, renglones, columnas );
+  
   double Fx0 = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
 
   while ( flag )
@@ -1820,10 +1620,7 @@ void solve_punto_fijo_ALM(double* &Is_h, double* &Ic_h, double* &Is1_h, double* 
 
       // calcula iteracion de Gauss-Seidel
       // retorna solucion actualizada en Is, Ic
-      punto_Fijo_TV_ALM(Is_h, Ic_h, Is1_h, Ic1_h);
-      //solve_descenso_gradiente_ALM(Is_h, Ic_h, Is1_h, Ic1_h);
-
-      //P = atan2(Is, Ic);
+      punto_Fijo_TV_ALM(Is_h, Ic_h, Is1_h, Ic1_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22);
 
       double Fx = Funcional( Is_h, Ic_h, Q11, Q12, Q21, Q22, Mu11, Mu12, Mu21, Mu22 );
       double difF = fabs(Fx0-Fx);  
