@@ -3,12 +3,13 @@
 
 Programa que resuelve el modelo de WPD vía la reformulación con el Metodo de Lagrangiano Aumentado (ALM) realiza K iteraciones de Gauss-Seidel.
 
+// It is necessary to create a folder: imagenes, where the program stores the generated output
 
 //*************************************************************************
 //
-//    Programa que resuelve el modelo para filtrado utilizando punto fijo 
-//    y descenso de gradiente para el Metodo de Lagrangiano Aumentado (ALM)
-//    realiza K iteraciones de Gauss-Seidel
+// Program that solves the filtering model using fixed point
+// and gradient descent for the Augmented Lagrangian Method (ALM)
+// performs K Gauss-Seidel iterations
 //
 // Author       : Iván de Jesús May-Cen
 // Language     : C++
